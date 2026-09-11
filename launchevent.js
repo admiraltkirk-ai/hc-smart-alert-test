@@ -1,13 +1,20 @@
-/* HC Smart Alert proof-of-concept.
-   This first test deliberately warns on every send.
-   It does not yet inspect recipients, labels, or attachments. */
-
 function onMessageSendHandler(event) {
-  event.completed({
-    allowEvent: false,
-    errorMessage: "HC Smart Alert test: this is a warning only. You can still choose Send Anyway.",
-    errorMessageMarkdown: "**HC Smart Alert test**\n\nThis is a warning only. You can still choose **Send Anyway**."
+  Office.context.mailbox.item.getAttachmentsAsync(function (result) {
+    if (result.status === Office.AsyncResultStatus.Succeeded) {
+      var attachments = result.value || [];
+      if (attachments.length === 0) {
+        event.completed({ allowEvent: true });
+        return;
+      }
+      event.completed({
+        allowEvent: false,
+        errorMessage: "Attachment test: this message contains an attachment. You can still choose Send anyway.",
+        errorMessageMarkdown: "**Attachment test**\n\nThis message contains an attachment. You can still choose **Send anyway**."
+      });
+      return;
+    }
+    event.completed({ allowEvent: true });
   });
 }
-
 Office.actions.associate("onMessageSendHandler", onMessageSendHandler);
+
