@@ -1,20 +1,23 @@
 function onMessageSendHandler(event) {
-  Office.context.mailbox.item.getAttachmentsAsync(function (result) {
-    if (result.status === Office.AsyncResultStatus.Succeeded) {
-      var attachments = result.value || [];
-      if (attachments.length === 0) {
-        event.completed({ allowEvent: true });
+  Office.context.mailbox.item.getAttachmentsAsync(
+    { asyncContext: event },
+    function (asyncResult) {
+      var sendEvent = asyncResult.asyncContext;
+      if (asyncResult.status !== Office.AsyncResultStatus.Succeeded) {
+        sendEvent.completed({ allowEvent: true });
         return;
       }
-      event.completed({
+      var attachments = asyncResult.value || [];
+      if (attachments.length === 0) {
+        sendEvent.completed({ allowEvent: true });
+        return;
+      }
+      sendEvent.completed({
         allowEvent: false,
         errorMessage: "Attachment test: this message contains an attachment. You can still choose Send anyway.",
-        errorMessageMarkdown: "**Attachment test**\n\nThis message contains an attachment. You can still choose **Send anyway**."
+        errorMessageMarkdown: "**Attachment test**\\n\\nThis message contains an attachment. You can still choose **Send anyway**."
       });
-      return;
     }
-    event.completed({ allowEvent: true });
-  });
+  );
 }
 Office.actions.associate("onMessageSendHandler", onMessageSendHandler);
-
