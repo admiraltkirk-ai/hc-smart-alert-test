@@ -1,9 +1,10 @@
-console.log("HC Smart Alert: metadata diagnostic loaded");
+console.log("HC Smart Alert: label diagnostic loaded");
 
 function onMessageSendHandler(event) {
-  console.log("HC Smart Alert: onMessageSendHandler fired");
+  console.log("HC Smart Alert: handler fired");
 
   Office.context.mailbox.item.getAttachmentsAsync(function (result) {
+
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
       console.log("HC Smart Alert: attachment lookup FAILED", result.error);
       event.completed({ allowEvent: true });
@@ -21,15 +22,10 @@ function onMessageSendHandler(event) {
 
     var attachment = attachments[0];
 
-    console.log("HC Smart Alert: examining attachment", {
-      name: attachment.name,
-      size: attachment.size,
-      attachmentType: attachment.attachmentType
-    });
-
     Office.context.mailbox.item.getAttachmentContentAsync(
       attachment.id,
       function (contentResult) {
+
         if (contentResult.status !== Office.AsyncResultStatus.Succeeded) {
           console.log(
             "HC Smart Alert: content retrieval FAILED",
@@ -39,130 +35,123 @@ function onMessageSendHandler(event) {
           event.completed({
             allowEvent: false,
             errorMessage:
-              "Attachment detected, but its content could not be examined. You can still choose Send anyway."
+              "Attachment could not be inspected. You can still choose Send anyway."
           });
+
           return;
         }
 
-        var content = contentResult.value;
-
-        console.log("HC Smart Alert: content retrieval SUCCEEDED");
-        console.log("HC Smart Alert: content format =", content.format);
-
         try {
-          var binary = atob(content.content);
-
-          console.log("HC Smart Alert: decoded bytes =", binary.length);
-
-          // Confirm the OLE / Compound File signature.
-          var signature = [];
-
-          for (var i = 0; i < Math.min(8, binary.length); i++) {
-            signature.push(
-              binary.charCodeAt(i).toString(16).padStart(2, "0")
-            );
-          }
+          var binary = atob(contentResult.value.content);
 
           console.log(
-            "HC Smart Alert: file signature =",
-            signature.join(" ")
+            "HC Smart Alert: inspecting",
+            attachment.name,
+            binary.length,
+            "bytes"
           );
 
           /*
-           * Extract runs of readable ASCII characters.
-           * We deliberately do NOT print the whole document.
+           * Extract readable ASCII strings.
            */
-          var readableStrings = [];
+          var strings = [];
           var current = "";
 
-          for (var j = 0; j < binary.length; j++) {
-            var code = binary.charCodeAt(j);
+          for (var i = 0; i < binary.length; i++) {
+            var code = binary.charCodeAt(i);
 
             if (code >= 32 && code <= 126) {
               current += String.fromCharCode(code);
             } else {
               if (current.length >= 4) {
-                readableStrings.push(current);
+                strings.push(current);
               }
+
               current = "";
             }
           }
 
           if (current.length >= 4) {
-            readableStrings.push(current);
+            strings.push(current);
           }
 
-          var keywords = [
-            "label",
-            "msip",
-            "sensitivity",
-            "encrypted",
-            "encryption",
-            "microsoft",
-            "protection",
-            "protected",
-            "publishing",
-            "license",
-            "irm",
-            "drm"
-          ];
-
-          var matches = [];
-
-          readableStrings.forEach(function (text) {
+          /*
+           * Find the MSO rights-label metadata.
+           */
+          var labelBlocks = strings.filter(function (text) {
             var lower = text.toLowerCase();
 
-            var matched = keywords.some(function (keyword) {
-              return lower.indexOf(keyword) !== -1;
-            });
+            return (
+              lower.indexOf("mso:soft rights label") !== -1 ||
+              lower.indexOf("name=lcid") !== -1
+            );
+          });
 
-            if (matched) {
-              // Avoid huge console output.
-              var safeText =
-                text.length > 300
-                  ? text.substring(0, 300) + "..."
-                  : text;
+          console.log(
+            "HC Smart Alert: rights label blocks =",
+            labelBlocks.length
+          );
 
-              if (matches.indexOf(safeText) === -1) {
-                matches.push(safeText);
-              }
+          labelBlocks.forEach(function (block, index) {
+
+            console.log(
+              "========== HC LABEL BLOCK " +
+              (index + 1) +
+              " =========="
+            );
+
+            console.log(block);
+
+            console.log(
+              "========== END HC LABEL BLOCK =========="
+            );
+          });
+
+          /*
+           * Search the label block for GUID-looking values.
+           */
+          var combined = labelBlocks.join(" ");
+
+          var guidRegex =
+            /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
+
+          var guids = combined.match(guidRegex) || [];
+
+          var uniqueGuids = [];
+
+          guids.forEach(function (guid) {
+            var normalised = guid.toLowerCase();
+
+            if (uniqueGuids.indexOf(normalised) === -1) {
+              uniqueGuids.push(normalised);
             }
           });
 
           console.log(
-            "HC Smart Alert: metadata keyword matches =",
-            matches.length
+            "HC Smart Alert: GUID candidates =",
+            uniqueGuids
           );
 
-          matches.slice(0, 30).forEach(function (match, index) {
-            console.log(
-              "HC Smart Alert: MATCH " + (index + 1) + " =",
-              match
-            );
-          });
-
-          if (matches.length === 0) {
-            console.log(
-              "HC Smart Alert: no readable protection metadata found"
-            );
-          }
-
+          /*
+           * Diagnostic popup only.
+           */
           event.completed({
             allowEvent: false,
             errorMessage:
-              "HC attachment diagnostic completed. You can still choose Send anyway."
+              "Sensitivity-label metadata was inspected. You can still choose Send anyway."
           });
 
         } catch (e) {
+
           console.log(
-            "HC Smart Alert: diagnostic FAILED =",
+            "HC Smart Alert: label diagnostic FAILED",
             e
           );
 
           event.completed({
             allowEvent: false,
             errorMessage:
-              "Attachment diagnostic failed. You can still choose Send anyway."
+              "Label diagnostic failed. You can still choose Send anyway."
           });
         }
       }
@@ -171,6 +160,7 @@ function onMessageSendHandler(event) {
 }
 
 Office.onReady(function () {
+
   console.log("HC Smart Alert: Office.js ready");
 
   Office.actions.associate(
