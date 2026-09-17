@@ -1,3 +1,4 @@
+console.log("HC Smart Alert: GUID-LABEL diagnostic v5 loaded");
 console.log("HC Smart Alert: raw metadata diagnostic loaded");
 
 function onMessageSendHandler(event) {
