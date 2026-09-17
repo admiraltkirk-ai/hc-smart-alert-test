@@ -6,16 +6,24 @@ function onMessageSendHandler(event) {
   Office.context.mailbox.item.getAttachmentsAsync(function (result) {
 
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      console.log("HC Smart Alert: attachment lookup failed");
+      console.log("HC Smart Alert: attachment lookup failed", result.error);
       event.completed({ allowEvent: true });
       return;
     }
 
     var attachments = result.value || [];
 
-    console.log(
-      "HC Smart Alert: attachment count = " + attachments.length
-    );
+    console.log("HC Smart Alert: attachment count =", attachments.length);
+
+    attachments.forEach(function (attachment, index) {
+      console.log("HC Smart Alert: attachment " + index, {
+        id: attachment.id,
+        name: attachment.name,
+        size: attachment.size,
+        attachmentType: attachment.attachmentType,
+        isInline: attachment.isInline
+      });
+    });
 
     if (attachments.length === 0) {
       event.completed({ allowEvent: true });
