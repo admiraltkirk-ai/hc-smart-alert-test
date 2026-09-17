@@ -1,4 +1,4 @@
-console.log("HC Smart Alert: GUID-LABEL diagnostic v5 loaded");
+console.log("HC Smart Alert: GUID-LABEL diagnostic v6 loaded");
 console.log("HC Smart Alert: raw metadata diagnostic loaded");
 
 function onMessageSendHandler(event) {
@@ -7,14 +7,21 @@ function onMessageSendHandler(event) {
   Office.context.mailbox.item.getAttachmentsAsync(function (result) {
 
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      console.log("HC Smart Alert: attachment lookup FAILED", result.error);
+      console.log(
+        "HC Smart Alert: attachment lookup FAILED",
+        result.error
+      );
+
       event.completed({ allowEvent: true });
       return;
     }
 
     var attachments = result.value || [];
 
-    console.log("HC Smart Alert: attachment count =", attachments.length);
+    console.log(
+      "HC Smart Alert: attachment count =",
+      attachments.length
+    );
 
     if (attachments.length === 0) {
       event.completed({ allowEvent: true });
@@ -32,7 +39,10 @@ function onMessageSendHandler(event) {
       attachment.id,
       function (contentResult) {
 
-        if (contentResult.status !== Office.AsyncResultStatus.Succeeded) {
+        if (
+          contentResult.status !==
+          Office.AsyncResultStatus.Succeeded
+        ) {
           console.log(
             "HC Smart Alert: content retrieval FAILED",
             contentResult.error
@@ -77,8 +87,8 @@ function onMessageSendHandler(event) {
           }
 
           /*
-           * Search for markers previously observed
-           * inside the protected Office container.
+           * Search for markers observed inside the
+           * protected Office container.
            */
           var markers = [
             "MSO:soft Rights Label",
@@ -100,30 +110,29 @@ function onMessageSendHandler(event) {
 
             console.log(
               'HC Smart Alert: marker "' +
-              marker +
-              '" position =',
+                marker +
+                '" position =',
               position
             );
 
             if (position !== -1) {
               foundAny = true;
 
-              /*
-               * Print 500 characters before and
-               * 1500 characters after the marker.
-               */
               var start = Math.max(0, position - 500);
               var end = Math.min(
                 searchable.length,
                 position + 1500
               );
 
-              var section = searchable.substring(start, end);
+              var section = searchable.substring(
+                start,
+                end
+              );
 
               console.log(
                 "========== RAW METADATA AROUND " +
-                marker +
-                " =========="
+                  marker +
+                  " =========="
               );
 
               console.log(section);
@@ -135,8 +144,8 @@ function onMessageSendHandler(event) {
           });
 
           /*
-           * Also collect GUID-shaped values from the
-           * entire printable representation.
+           * Collect GUID-shaped values from the
+           * protected document metadata.
            */
           var guidRegex =
             /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
@@ -147,7 +156,6 @@ function onMessageSendHandler(event) {
           var uniqueGuids = [];
 
           guidMatches.forEach(function (guid) {
-
             var normalised = guid.toLowerCase();
 
             if (
@@ -161,6 +169,53 @@ function onMessageSendHandler(event) {
             "HC Smart Alert: ALL GUID candidates =",
             uniqueGuids
           );
+
+          /*
+           * Find the Highly Confidential FINANCE label
+           * and inspect the metadata immediately before it.
+           */
+          var labelName =
+            "Highly Confidential FINANCE";
+
+          var labelPosition = searchable
+            .toLowerCase()
+            .indexOf(labelName.toLowerCase());
+
+          console.log(
+            "HC Smart Alert: FINANCE label position =",
+            labelPosition
+          );
+
+          if (labelPosition !== -1) {
+
+            var labelStart = Math.max(
+              0,
+              labelPosition - 1000
+            );
+
+            var labelSection =
+              searchable.substring(
+                labelStart,
+                labelPosition + 300
+              );
+
+            var labelGuids =
+              labelSection.match(guidRegex) || [];
+
+            console.log(
+              "HC Smart Alert: GUIDs immediately before FINANCE label =",
+              labelGuids
+            );
+
+            console.log(
+              "HC Smart Alert: FINANCE label metadata block =",
+              labelSection
+            );
+          } else {
+            console.log(
+              "HC Smart Alert: FINANCE label NOT FOUND"
+            );
+          }
 
           console.log(
             "HC Smart Alert: metadata marker found =",
@@ -193,43 +248,16 @@ function onMessageSendHandler(event) {
 
 Office.onReady(function () {
 
-  console.log("HC Smart Alert: Office.js ready");
+  console.log(
+    "HC Smart Alert: Office.js ready"
+  );
 
   Office.actions.associate(
     "onMessageSendHandler",
     onMessageSendHandler
   );
 
-  console.log("HC Smart Alert: handler associated");
+  console.log(
+    "HC Smart Alert: handler associated"
+  );
 });
-// Find the GUID associated with the Highly Confidential FINANCE label.
-var labelName = "Highly Confidential FINANCE";
-var labelPosition = searchable
-  .toLowerCase()
-  .indexOf(labelName.toLowerCase());
-
-console.log(
-  "HC Smart Alert: FINANCE label position =",
-  labelPosition
-);
-
-if (labelPosition !== -1) {
-  // The Rights Label GUID should occur shortly before its NAME element.
-  var labelStart = Math.max(0, labelPosition - 1000);
-  var labelSection = searchable.substring(
-    labelStart,
-    labelPosition + 300
-  );
-
-  var labelGuids = labelSection.match(guidRegex) || [];
-
-  console.log(
-    "HC Smart Alert: GUIDs immediately before FINANCE label =",
-    labelGuids
-  );
-
-  console.log(
-    "HC Smart Alert: FINANCE label metadata block =",
-    labelSection
-  );
-}
