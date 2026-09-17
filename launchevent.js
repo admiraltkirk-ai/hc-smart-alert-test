@@ -202,3 +202,34 @@ Office.onReady(function () {
 
   console.log("HC Smart Alert: handler associated");
 });
+// Find the GUID associated with the Highly Confidential FINANCE label.
+var labelName = "Highly Confidential FINANCE";
+var labelPosition = searchable
+  .toLowerCase()
+  .indexOf(labelName.toLowerCase());
+
+console.log(
+  "HC Smart Alert: FINANCE label position =",
+  labelPosition
+);
+
+if (labelPosition !== -1) {
+  // The Rights Label GUID should occur shortly before its NAME element.
+  var labelStart = Math.max(0, labelPosition - 1000);
+  var labelSection = searchable.substring(
+    labelStart,
+    labelPosition + 300
+  );
+
+  var labelGuids = labelSection.match(guidRegex) || [];
+
+  console.log(
+    "HC Smart Alert: GUIDs immediately before FINANCE label =",
+    labelGuids
+  );
+
+  console.log(
+    "HC Smart Alert: FINANCE label metadata block =",
+    labelSection
+  );
+}
