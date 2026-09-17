@@ -1,4 +1,4 @@
-console.log("HC Smart Alert: label diagnostic loaded");
+console.log("HC Smart Alert: raw metadata diagnostic loaded");
 
 function onMessageSendHandler(event) {
   console.log("HC Smart Alert: handler fired");
@@ -21,6 +21,11 @@ function onMessageSendHandler(event) {
     }
 
     var attachment = attachments[0];
+
+    console.log(
+      "HC Smart Alert: examining attachment =",
+      attachment.name
+    );
 
     Office.context.mailbox.item.getAttachmentContentAsync(
       attachment.id,
@@ -45,113 +50,139 @@ function onMessageSendHandler(event) {
           var binary = atob(contentResult.value.content);
 
           console.log(
-            "HC Smart Alert: inspecting",
-            attachment.name,
-            binary.length,
-            "bytes"
+            "HC Smart Alert: decoded bytes =",
+            binary.length
           );
 
           /*
-           * Extract readable ASCII strings.
+           * Convert non-printable bytes to spaces while
+           * preserving the original byte positions.
            */
-          var strings = [];
-          var current = "";
+          var searchable = "";
 
           for (var i = 0; i < binary.length; i++) {
             var code = binary.charCodeAt(i);
 
-            if (code >= 32 && code <= 126) {
-              current += String.fromCharCode(code);
+            if (
+              (code >= 32 && code <= 126) ||
+              code === 9 ||
+              code === 10 ||
+              code === 13
+            ) {
+              searchable += binary.charAt(i);
             } else {
-              if (current.length >= 4) {
-                strings.push(current);
-              }
-
-              current = "";
+              searchable += " ";
             }
           }
 
-          if (current.length >= 4) {
-            strings.push(current);
-          }
-
           /*
-           * Find the MSO rights-label metadata.
+           * Search for markers previously observed
+           * inside the protected Office container.
            */
-          var labelBlocks = strings.filter(function (text) {
-            var lower = text.toLowerCase();
+          var markers = [
+            "MSO:soft Rights Label",
+            "Rights Label",
+            "Highly Confidential",
+            "NAME=LCID",
+            "MS-DRM-Server",
+            "ISSUEDTIME",
+            "DESCRIPTOR"
+          ];
 
-            return (
-              lower.indexOf("mso:soft rights label") !== -1 ||
-              lower.indexOf("name=lcid") !== -1
-            );
-          });
+          var foundAny = false;
 
-          console.log(
-            "HC Smart Alert: rights label blocks =",
-            labelBlocks.length
-          );
+          markers.forEach(function (marker) {
 
-          labelBlocks.forEach(function (block, index) {
+            var position = searchable
+              .toLowerCase()
+              .indexOf(marker.toLowerCase());
 
             console.log(
-              "========== HC LABEL BLOCK " +
-              (index + 1) +
-              " =========="
+              'HC Smart Alert: marker "' +
+              marker +
+              '" position =',
+              position
             );
 
-            console.log(block);
+            if (position !== -1) {
+              foundAny = true;
 
-            console.log(
-              "========== END HC LABEL BLOCK =========="
-            );
+              /*
+               * Print 500 characters before and
+               * 1500 characters after the marker.
+               */
+              var start = Math.max(0, position - 500);
+              var end = Math.min(
+                searchable.length,
+                position + 1500
+              );
+
+              var section = searchable.substring(start, end);
+
+              console.log(
+                "========== RAW METADATA AROUND " +
+                marker +
+                " =========="
+              );
+
+              console.log(section);
+
+              console.log(
+                "========== END RAW METADATA =========="
+              );
+            }
           });
 
           /*
-           * Search the label block for GUID-looking values.
+           * Also collect GUID-shaped values from the
+           * entire printable representation.
            */
-          var combined = labelBlocks.join(" ");
-
           var guidRegex =
             /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
 
-          var guids = combined.match(guidRegex) || [];
+          var guidMatches =
+            searchable.match(guidRegex) || [];
 
           var uniqueGuids = [];
 
-          guids.forEach(function (guid) {
+          guidMatches.forEach(function (guid) {
+
             var normalised = guid.toLowerCase();
 
-            if (uniqueGuids.indexOf(normalised) === -1) {
+            if (
+              uniqueGuids.indexOf(normalised) === -1
+            ) {
               uniqueGuids.push(normalised);
             }
           });
 
           console.log(
-            "HC Smart Alert: GUID candidates =",
+            "HC Smart Alert: ALL GUID candidates =",
             uniqueGuids
           );
 
-          /*
-           * Diagnostic popup only.
-           */
+          console.log(
+            "HC Smart Alert: metadata marker found =",
+            foundAny
+          );
+
           event.completed({
             allowEvent: false,
             errorMessage:
-              "Sensitivity-label metadata was inspected. You can still choose Send anyway."
+              "Protected-document metadata diagnostic completed. You can still choose Send anyway."
           });
 
         } catch (e) {
 
           console.log(
-            "HC Smart Alert: label diagnostic FAILED",
+            "HC Smart Alert: raw diagnostic FAILED",
             e
           );
 
           event.completed({
             allowEvent: false,
             errorMessage:
-              "Label diagnostic failed. You can still choose Send anyway."
+              "Attachment diagnostic failed. You can still choose Send anyway."
           });
         }
       }
